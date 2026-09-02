@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conduct With Me</title>
+<style>
+  :root { --bg:#10131a; --panel:#191e28; --text:#f5f7fb; --muted:#aeb6c5; --accent:#62d6ff; --beat:#ffd45a; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--text); display:flex; justify-content:center; }
+  .app { width:min(1100px,100%); padding:22px; display:flex; flex-direction:column; gap:16px; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  h1 { margin:0; font-size:clamp(26px,4vw,42px); }
+  .subtitle { color:var(--muted); margin-top:3px; }
+  .card { background:var(--panel); border-radius:20px; padding:18px; }
+  .settings { display:grid; grid-template-columns:1fr 1fr 1.5fr; gap:12px; }
+  label { display:block; color:var(--muted); font-size:13px; margin-bottom:6px; }
+  select,input,button { font:inherit; }
+  select,input[type=number] { width:100%; padding:11px 12px; border:1px solid #343b49; border-radius:12px; background:#0f131a; color:var(--text); }
+  .tempo { display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; }
+  button { border:0; border-radius:12px; padding:11px 15px; cursor:pointer; background:#2a3140; color:var(--text); font-weight:700; }
+  button:hover { filter:brightness(1.15); }
+  .primary { background:var(--accent); color:#071017; }
+  .stage { min-height:500px; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  .meter { position:absolute; top:18px; left:20px; font-size:20px; font-weight:800; }
+  .status { position:absolute; top:18px; right:20px; color:var(--muted); font-weight:700; }
+  svg { width:min(720px,92%); height:auto; overflow:visible; }
+  .path { fill:none; stroke:#667085; stroke-width:3; stroke-dasharray:8 10; opacity:.65; }
+  .point { fill:#596273; transition:.12s; }
+  .point.active { fill:var(--beat); r:13; }
+  .baton { stroke:var(--accent); stroke-width:7; stroke-linecap:round; transition:transform .06s linear; filter:drop-shadow(0 0 8px rgba(98,214,255,.5)); }
+  .tip { fill:var(--accent); filter:drop-shadow(0 0 8px rgba(98,214,255,.7)); }
+  .beatLabel { fill:#aeb6c5; font-size:24px; font-weight:800; text-anchor:middle; dominant-baseline:middle; }
+  .beatLabel.active { fill:var(--beat); }
+  .bigBeat { font-size:54px; font-weight:900; margin-top:-18px; }
+  .direction { color:var(--muted); font-size:18px; min-height:28px; }
+  .controls { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+  .count { text-align:center; color:var(--muted); }
+  .tips { color:var(--muted); text-align:center; line-height:1.5; }
+  @media(max-width:700px){ .settings{grid-template-columns:1fr;} .stage{min-height:430px;} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>🎼 Conduct With Me</h1>
+      <div class="subtitle">A simple visual conducting guide for music practice</div>
+    </div>
+  </header>
+
+  <section class="card settings">
+    <div>
+      <label for="meter">Meter</label>
+      <select id="meter">
+        <option value="2">2/4</option>
+        <option value="3">3/4</option>
+        <option value="4" selected>4/4</option>
+        <option value="6">6/8</option>
+      </select>
+    </div>
+    <div>
+      <label for="mode">Practice Mode</label>
+      <select id="mode">
+        <option value="follow" selected>🟢 Follow — watch the baton</option>
+        <option value="conduct">🟡 Conduct — follow along</option>
+        <option value="independent">🔴 Independent — numbers only</option>
+      </select>
+    </div>
+    <div>
+      <label>Tempo</label>
+      <div class="tempo">
+        <button id="minus">−10</button>
+        <input id="bpm" type="number" min="40" max="200" value="100" aria-label="BPM">
+        <button id="plus">+10</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card stage">
+    <div class="meter" id="meterDisplay">4/4</div>
+    <div class="status" id="status">READY</div>
+
+    <svg viewBox="0 0 700 430" aria-label="Animated conducting pattern">
+      <path id="path" class="path" d="M350 350 L350 100 L180 230 L520 230 L350 350" />
+      <g id="points"></g>
+      <line id="baton" class="baton" x1="350" y1="350" x2="390" y2="300"/>
+      <circle id="tip" class="tip" cx="390" cy="300" r="8"/>
+    </svg>
+
+    <div class="bigBeat" id="bigBeat">READY</div>
+    <div class="direction" id="direction">Press Start when you're ready.</div>
+
+    <div class="controls">
+      <button id="start" class="primary">▶ Start</button>
+      <button id="stop">■ Stop</button>
+      <button id="prep">↻ Prep Beat</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="count">Measure <strong id="measure">1</strong> · Beat <strong id="beat">1</strong></div>
+    <div class="tips" id="tips">4/4: Down → Left → Right → Up</div>
+  </section>
+</div>
+
+<script>
+const patterns = {
+  2: {
+    names:["1","2"],
+    dirs:["DOWN","UP"],
+    pts:[[350,350],[350,100]],
+    path:"M350 350 L350 100",
+    tipAngles:[90,-90]
+  },
+  3: {
+    names:["1","2","3"],
+    dirs:["DOWN","RIGHT","UP"],
+    pts:[[350,350],[520,230],[350,100]],
+    path:"M350 350 L520 230 L350 100",
+    tipAngles:[90,0,-90]
+  },
+  4: {
+    names:["1","2","3","4"],
+    dirs:["DOWN","LEFT","RIGHT","UP"],
+    pts:[[350,350],[180,230],[520,230],[350,100]],
+    path:"M350 350 L180 230 L520 230 L350 100",
+    tipAngles:[90,180,0,-90]
+  },
+  6: {
+    names:["1","2","3","4","5","6"],
+    dirs:["DOWN","RIGHT","UP","DOWN","RIGHT","UP"],
+    pts:[[350,350],[520,230],[350,100],[350,350],[520,230],[350,100]],
+    path:"M350 350 L520 230 L350 100 M350 350 L520 230 L350 100",
+    tipAngles:[90,0,-90,90,0,-90]
+  }
+};
+
+let meter=4, beat=0, measure=1, running=false, timer=null, audioCtx=null;
+const $=id=>document.getElementById(id);
+
+function renderPattern(){
+  const p=patterns[meter];
+  $("meterDisplay").textContent=meter+"/4";
+  $("path").setAttribute("d",p.path);
+  $("points").innerHTML="";
+  p.pts.forEach((pt,i)=>{
+    const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("class","point");
+    c.setAttribute("cx",pt[0]); c.setAttribute("cy",pt[1]); c.setAttribute("r",9);
+    c.dataset.i=i; $("points").appendChild(c);
+    const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+    t.setAttribute("class","beatLabel"); t.setAttribute("x",pt[0]); t.setAttribute("y",pt[1]-30);
+    t.textContent=p.names[i]; t.dataset.i=i; $("points").appendChild(t);
+  });
+  const descriptions = {2:"2/4: Down → Up",3:"3/4: Down → Right → Up",4:"4/4: Down → Left → Right → Up",6:"6/8: Down-Right-Up, Down-Right-Up"};
+  $("tips").textContent=descriptions[meter];
+  setBeat(0,false);
+}
+
+function setBeat(i, click=true){
+  const p=patterns[meter];
+  beat=i;
+  document.querySelectorAll(".point,.beatLabel").forEach(el=>el.classList.toggle("active",Number(el.dataset.i)===i));
+  $("bigBeat").textContent=p.names[i];
+  $("direction").textContent=p.dirs[i];
+  $("beat").textContent=i+1;
+  const [x,y]=p.pts[i];
+  const angle=p.tipAngles[i]*Math.PI/180;
+  const len=75, tx=x+Math.cos(angle)*len, ty=y+Math.sin(angle)*len;
+  $("baton").setAttribute("x1",x); $("baton").setAttribute("y1",y);
+  $("baton").setAttribute("x2",tx); $("baton").setAttribute("y2",ty);
+  $("tip").setAttribute("cx",tx); $("tip").setAttribute("cy",ty);
+  if(click) clickSound(i===0);
+}
+
+function clickSound(accent=false){
+  if(!audioCtx) return;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.frequency.value=accent?1000:700;
+  g.gain.setValueAtTime(.0001,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(accent?.12:.07,audioCtx.currentTime+.005);
+  g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+.06);
+  o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+.07);
+}
+
+function tick(){
+  setBeat(beat);
+  beat++;
+  if(beat>=patterns[meter].pts.length){
+    beat=0; measure++;
+    $("measure").textContent=measure;
+  }
+}
+
+function start(){
+  if(running) return;
+  running=true; $("status").textContent="PLAYING";
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  audioCtx.resume();
+  // One-beat prep: show beat 4/last, then begin on 1.
+  const p=patterns[meter];
+  beat=p.pts.length-1; setBeat(beat);
+  setTimeout(()=>{
+    if(!running) return;
+    beat=0; measure=1; $("measure").textContent=measure; tick();
+    schedule();
+  },60000/Number($("bpm").value));
+}
+function schedule(){
+  if(!running) return;
+  const interval=60000/Math.max(40,Math.min(200,Number($("bpm").value)||100));
+  timer=setTimeout(()=>{ tick(); schedule(); },interval);
+}
+function stop(){
+  running=false; clearTimeout(timer); $("status").textContent="STOPPED";
+  $("bigBeat").textContent="READY"; $("direction").textContent="Press Start when you're ready.";
+}
+function prep(){
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  audioCtx.resume();
+  const p=patterns[meter];
+  setBeat(p.pts.length-1); $("status").textContent="PREP";
+  setTimeout(()=>{ if(!running){setBeat(0); $("status").textContent="READY";}},60000/Number($("bpm").value));
+}
+$("meter").onchange=e=>{ stop(); meter=Number(e.target.value); renderPattern(); };
+$("bpm").onchange=e=>{ e.target.value=Math.max(40,Math.min(200,Number(e.target.value)||100)); if(running){stop();start();} };
+$("minus").onclick=()=>{$("bpm").value=Math.max(40,Number($("bpm").value)-10); $("bpm").dispatchEvent(new Event("change"));};
+$("plus").onclick=()=>{$("bpm").value=Math.min(200,Number($("bpm").value)+10); $("bpm").dispatchEvent(new Event("change"));};
+$("start").onclick=start; $("stop").onclick=stop; $("prep").onclick=prep;
+$("mode").onchange=e=>{
+  const independent=e.target.value==="independent";
+  document.querySelectorAll(".point,.baton,.tip").forEach(el=>el.style.visibility=independent?"hidden":"visible");
+};
+renderPattern();
+</script>
+</body>
+</html>
